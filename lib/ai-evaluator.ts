@@ -47,15 +47,25 @@ export class AIEvaluator {
   private openai?: OpenAI;
 
   constructor() {
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-    }
-    if (process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
+    try {
+      if (process.env.ANTHROPIC_API_KEY) {
+        this.anthropic = new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+        });
+        console.log('Anthropic client initialized');
+      }
+      if (process.env.OPENAI_API_KEY) {
+        this.openai = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
+        console.log('OpenAI client initialized');
+      }
+
+      if (!this.anthropic && !this.openai) {
+        console.warn('No AI clients initialized - using fallback evaluation');
+      }
+    } catch (error) {
+      console.error('Error initializing AI clients:', error);
     }
   }
 
@@ -94,6 +104,7 @@ Response in JSON format:
       let result: string;
 
       if (this.anthropic) {
+        console.log('Using Anthropic for evaluation');
         const message = await this.anthropic.messages.create({
           model: 'claude-3-haiku-20240307',
           max_tokens: 500,
@@ -101,6 +112,7 @@ Response in JSON format:
         });
         result = message.content[0].type === 'text' ? message.content[0].text : '';
       } else if (this.openai) {
+        console.log('Using OpenAI for evaluation');
         const completion = await this.openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
@@ -110,7 +122,12 @@ Response in JSON format:
         result = completion.choices[0]?.message?.content || '';
       } else {
         // Fallback to rule-based evaluation
+        console.log('Using fallback evaluation');
         return this.fallbackEvaluation(facet, response);
+      }
+
+      if (!result) {
+        throw new Error('Empty AI response');
       }
 
       const evaluation = JSON.parse(result);
@@ -122,6 +139,7 @@ Response in JSON format:
       };
     } catch (error) {
       console.error('AI evaluation error:', error);
+      console.log('Falling back to rule-based evaluation');
       return this.fallbackEvaluation(facet, response);
     }
   }

@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SAWAService } from '@/lib/sawa-service';
 import { SessionStore } from '@/lib/session-store';
 
+// Ensure environment variables are loaded
+if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+  console.warn('No AI API keys found. AI evaluation will use fallback mode.');
+}
+
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {

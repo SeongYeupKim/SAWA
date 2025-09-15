@@ -1,18 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
   "framework": "nextjs",
-  "installCommand": "npm install",
   "regions": ["iad1"],
   "functions": {
-    "app/api/session/create/route.ts": {
+    "app/api/**": {
       "maxDuration": 60
-    },
-    "app/api/session/respond/route.ts": {
-      "maxDuration": 60
-    },
-    "app/api/session/export/route.ts": {
-      "maxDuration": 30
     }
   }
 }

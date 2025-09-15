@@ -2,23 +2,37 @@
 
 import { Facet, FacetEvaluation } from './types';
 
-// Dynamic imports to handle serverless environment
-let Anthropic: any = null;
-let OpenAI: any = null;
+// Import AI clients directly for better compatibility
+let AnthropicClient: any = null;
+let OpenAIClient: any = null;
 
-async function loadAIClients() {
-  try {
-    if (process.env.ANTHROPIC_API_KEY && !Anthropic) {
-      const { Anthropic: AnthropicSDK } = await import('@anthropic-ai/sdk');
-      Anthropic = AnthropicSDK;
+// Load AI clients on first use
+async function getAIClients() {
+  if (!AnthropicClient && process.env.ANTHROPIC_API_KEY) {
+    try {
+      const { Anthropic } = await import('@anthropic-ai/sdk');
+      AnthropicClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      console.log('Anthropic client initialized');
+    } catch (error) {
+      console.error('Failed to initialize Anthropic:', error);
     }
-    if (process.env.OPENAI_API_KEY && !OpenAI) {
-      const { default: OpenAISDK } = await import('openai');
-      OpenAI = OpenAISDK;
-    }
-  } catch (error) {
-    console.error('Error loading AI clients:', error);
   }
+
+  if (!OpenAIClient && process.env.OPENAI_API_KEY) {
+    try {
+      const { default: OpenAI } = await import('openai');
+      OpenAIClient = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      console.log('OpenAI client initialized');
+    } catch (error) {
+      console.error('Failed to initialize OpenAI:', error);
+    }
+  }
+
+  return { anthropic: AnthropicClient, openai: OpenAIClient };
 }
 
 const FACET_PROMPTS: Record<Facet, string> = {
@@ -60,43 +74,8 @@ const FACET_PROMPTS: Record<Facet, string> = {
 };
 
 export class AIEvaluator {
-  private anthropic?: any;
-  private openai?: any;
-  private initialized: boolean = false;
-
   constructor() {
-    // Don't initialize in constructor for serverless compatibility
-  }
-
-  private async ensureInitialized() {
-    if (this.initialized) return;
-
-    try {
-      await loadAIClients();
-
-      if (process.env.ANTHROPIC_API_KEY && Anthropic) {
-        this.anthropic = new Anthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
-        });
-        console.log('Anthropic client initialized');
-      }
-
-      if (process.env.OPENAI_API_KEY && OpenAI) {
-        this.openai = new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-        });
-        console.log('OpenAI client initialized');
-      }
-
-      if (!this.anthropic && !this.openai) {
-        console.warn('No AI clients initialized - using fallback evaluation');
-      }
-
-      this.initialized = true;
-    } catch (error) {
-      console.error('Error initializing AI clients:', error);
-      this.initialized = true; // Set to true to avoid retry loops
-    }
+    // Simple constructor for serverless compatibility
   }
 
   async evaluateResponse(
@@ -104,7 +83,6 @@ export class AIEvaluator {
     response: string,
     topic: string
   ): Promise<FacetEvaluation> {
-    await this.ensureInitialized();
     const prompt = `You are evaluating a student's response for the "${facet}" component of an argumentative essay about "${topic}".
 
 ${FACET_PROMPTS[facet]}
@@ -132,19 +110,20 @@ Response in JSON format:
 }`;
 
     try {
+      const { anthropic, openai } = await getAIClients();
       let result: string;
 
-      if (this.anthropic) {
+      if (anthropic) {
         console.log('Using Anthropic for evaluation');
-        const message = await this.anthropic.messages.create({
+        const message = await anthropic.messages.create({
           model: 'claude-3-haiku-20240307',
           max_tokens: 500,
           messages: [{ role: 'user', content: prompt }],
         });
         result = message.content[0].type === 'text' ? message.content[0].text : '';
-      } else if (this.openai) {
+      } else if (openai) {
         console.log('Using OpenAI for evaluation');
-        const completion = await this.openai.chat.completions.create({
+        const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: 'json_object' },
@@ -198,7 +177,6 @@ Response in JSON format:
     previousResponse: string,
     feedback: string
   ): Promise<string> {
-    await this.ensureInitialized();
     const prompt = `As a Socratic coach, generate a follow-up question for the "${facet}" stage.
 Previous response: "${previousResponse}"
 Feedback: "${feedback}"
@@ -206,15 +184,17 @@ Feedback: "${feedback}"
 Generate a thought-provoking question that guides deeper thinking without giving away the answer.`;
 
     try {
-      if (this.anthropic) {
-        const message = await this.anthropic.messages.create({
+      const { anthropic, openai } = await getAIClients();
+
+      if (anthropic) {
+        const message = await anthropic.messages.create({
           model: 'claude-3-haiku-20240307',
           max_tokens: 150,
           messages: [{ role: 'user', content: prompt }],
         });
         return message.content[0].type === 'text' ? message.content[0].text : '';
-      } else if (this.openai) {
-        const completion = await this.openai.chat.completions.create({
+      } else if (openai) {
+        const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,

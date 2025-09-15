@@ -32,9 +32,19 @@ export default function SAWACoach() {
         body: JSON.stringify({ topic }),
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
       const data = await res.json();
+      console.log('API Response:', data);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
       setSessionId(data.sessionId);
-      setCurrentQuestion(data.firstQuestion);
+      setCurrentQuestion(data.firstQuestion || "What is your main argument or claim about this topic?");
       setStarted(true);
       setFeedback('');
     } catch (error) {

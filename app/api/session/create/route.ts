@@ -23,11 +23,19 @@ export async function POST(request: NextRequest) {
     const session = await service.createSession(topic);
     await store.save(session);
 
+    const firstQuestion = session.messages[session.messages.length - 1]?.content || "What is your main argument or claim about this topic? Be specific about the conditions under which it applies.";
+
+    console.log('Session created:', {
+      sessionId: session.id,
+      messagesCount: session.messages.length,
+      firstQuestion
+    });
+
     return NextResponse.json({
       sessionId: session.id,
       topic: session.topic,
       currentFacet: session.currentFacet,
-      firstQuestion: session.messages[session.messages.length - 1].content,
+      firstQuestion,
     });
   } catch (error) {
     console.error('Failed to create session:', error);

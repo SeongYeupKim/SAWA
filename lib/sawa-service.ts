@@ -2,7 +2,10 @@
 
 import { AIEvaluator } from './ai-evaluator';
 import { Facet, SessionState, SAWAMessage, FacetEvaluation } from './types';
-import { v4 as uuidv4 } from 'uuid';
+// Use crypto.randomUUID() for serverless compatibility
+function generateId(): string {
+  return crypto.randomUUID();
+}
 
 const FACET_SEQUENCE: Facet[] = ['claim', 'evidence', 'reasoning', 'backing', 'qualifier', 'rebuttal'];
 
@@ -24,7 +27,7 @@ export class SAWAService {
 
   async createSession(topic: string): Promise<SessionState> {
     const now = new Date().toISOString();
-    const id = uuidv4();
+    const id = generateId();
 
     const facets: SessionState['facets'] = {} as any;
     for (const facet of FACET_SEQUENCE) {

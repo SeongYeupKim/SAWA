@@ -153,12 +153,12 @@ export class SAWAService {
     };
   }
 
-  async getProgress(session: SessionState): {
+  async getProgress(session: SessionState): Promise<{
     completedStages: number;
     totalStages: number;
     currentStage: string;
     overallLevel: number;
-  } {
+  }> {
     const completedStages = FACET_SEQUENCE.filter(f => session.facets[f].completed).length;
     const levels = FACET_SEQUENCE.map(f => session.facets[f].level);
     const overallLevel = Math.round(levels.reduce((a, b) => a + b, 0) / levels.length);

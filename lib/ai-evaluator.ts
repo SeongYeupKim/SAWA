@@ -1,8 +1,25 @@
 // AI-powered evaluation system based on GitHub SAWA structure
 
-import { Anthropic } from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
 import { Facet, FacetEvaluation } from './types';
+
+// Dynamic imports to handle serverless environment
+let Anthropic: any = null;
+let OpenAI: any = null;
+
+async function loadAIClients() {
+  try {
+    if (process.env.ANTHROPIC_API_KEY && !Anthropic) {
+      const { Anthropic: AnthropicSDK } = await import('@anthropic-ai/sdk');
+      Anthropic = AnthropicSDK;
+    }
+    if (process.env.OPENAI_API_KEY && !OpenAI) {
+      const { default: OpenAISDK } = await import('openai');
+      OpenAI = OpenAISDK;
+    }
+  } catch (error) {
+    console.error('Error loading AI clients:', error);
+  }
+}
 
 const FACET_PROMPTS: Record<Facet, string> = {
   claim: `Evaluate if this claim is:
@@ -43,18 +60,28 @@ const FACET_PROMPTS: Record<Facet, string> = {
 };
 
 export class AIEvaluator {
-  private anthropic?: Anthropic;
-  private openai?: OpenAI;
+  private anthropic?: any;
+  private openai?: any;
+  private initialized: boolean = false;
 
   constructor() {
+    // Don't initialize in constructor for serverless compatibility
+  }
+
+  private async ensureInitialized() {
+    if (this.initialized) return;
+
     try {
-      if (process.env.ANTHROPIC_API_KEY) {
+      await loadAIClients();
+
+      if (process.env.ANTHROPIC_API_KEY && Anthropic) {
         this.anthropic = new Anthropic({
           apiKey: process.env.ANTHROPIC_API_KEY,
         });
         console.log('Anthropic client initialized');
       }
-      if (process.env.OPENAI_API_KEY) {
+
+      if (process.env.OPENAI_API_KEY && OpenAI) {
         this.openai = new OpenAI({
           apiKey: process.env.OPENAI_API_KEY,
         });
@@ -64,8 +91,11 @@ export class AIEvaluator {
       if (!this.anthropic && !this.openai) {
         console.warn('No AI clients initialized - using fallback evaluation');
       }
+
+      this.initialized = true;
     } catch (error) {
       console.error('Error initializing AI clients:', error);
+      this.initialized = true; // Set to true to avoid retry loops
     }
   }
 
@@ -74,6 +104,7 @@ export class AIEvaluator {
     response: string,
     topic: string
   ): Promise<FacetEvaluation> {
+    await this.ensureInitialized();
     const prompt = `You are evaluating a student's response for the "${facet}" component of an argumentative essay about "${topic}".
 
 ${FACET_PROMPTS[facet]}
@@ -167,6 +198,7 @@ Response in JSON format:
     previousResponse: string,
     feedback: string
   ): Promise<string> {
+    await this.ensureInitialized();
     const prompt = `As a Socratic coach, generate a follow-up question for the "${facet}" stage.
 Previous response: "${previousResponse}"
 Feedback: "${feedback}"
